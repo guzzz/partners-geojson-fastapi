@@ -1,0 +1,69 @@
+version: "3.8"
+
+services:
+
+  mongodb_calculus:
+    image: mongo:5.0.2-focal
+    container_name: mongodb-calculus
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=pass12345
+    volumes:
+      - calculus-mongodb-data:/data/db
+    ports:
+      - 27018:27017
+
+  redis_calculus:
+    image: redis:6.2.5-alpine
+    container_name: redis-calculus
+    ports:
+      - 6380:6379
+
+  api_calculus:
+    image: calculus_api:dev
+    container_name: api-calculus
+    build: .
+    command: uvicorn app.main:app --reload --workers 1 --host 0.0.0.0 --port 8001
+    volumes:
+      - .:/usr/src/app
+    ports:
+      - 8001:8001
+    env_file:
+      - .env
+    depends_on:
+      - mongodb_calculus
+  
+  queue_calculus:
+    image: calculus_api:dev
+    container_name: queue-calculus
+    command: 'python -u consumer.py'
+    env_file:
+      - .env
+    depends_on:
+      - api_calculus
+
+  mongo-express-calculus:
+    image: mongo-express:1.0.0-alpha.4
+    container_name: mongo-express-calculus
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb_calculus
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=root
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=pass12345
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    depends_on:
+      - mongodb_calculus 
+      - api_calculus
+      - queue_calculus
+    ports:
+      - 8082:8081
+
+volumes:
+  calculus-mongodb-data:
+    name: calculus-mongodb-data
+  
+networks:
+  default:
+    external:
+      name: calculus-network
